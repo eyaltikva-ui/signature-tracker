@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מעקב חתימות דיגיטליות | עיריית רמת גן</title>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #F4F1EC;
+            --surface: #FFFFFF;
+            --surface-hover: #FAFAF8;
+            --primary: #1B4332;
+            --primary-light: #2D6A4F;
+            --accent: #D4A843;
+            --accent-light: #F0DCA0;
+            --danger: #C1292E;
+            --danger-light: #FADBD8;
+            --success: #27AE60;
+            --success-light: #D5F5E3;
+            --text: #1A1A1A;
+            --text-secondary: #5A5A5A;
+            --text-muted: #8A8A8A;
+            --border: #E0DCD5;
+            --border-light: #EDE9E3;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 30px rgba(0,0,0,0.12);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Heebo', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 20px rgba(27,67,50,0.3);
+        }
+
+        .header-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .header-icon {
+            width: 42px;
+            height: 42px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .header-sub {
+            font-size: 12px;
+            opacity: 0.7;
+            font-weight: 300;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .stat-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.12);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .stat-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .dot-pending { background: var(--accent); }
+        .dot-done { background: var(--success); }
+
+        .login-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .login-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 48px 40px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+
+        .login-card .icon-large { font-size: 48px; margin-bottom: 16px; }
+        .login-card h2 { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: var(--primary); }
+        .login-card p { color: var(--text-secondary); margin-bottom: 28px; font-size: 14px; }
+
+        .btn-google {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 14px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            background: white;
+            font-family: 'Heebo', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text);
+        }
+
+        .btn-google:hover { border-color: var(--primary); background: var(--surface-hover); }
+
+        .main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+
+        .filters { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+
+        .filter-btn {
+            padding: 8px 18px;
+            border: 1.5px solid var(--border);
+            border-radius: 24px;
+            background: var(--surface);
+            font-family: 'Heebo', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+
+        .filter-btn:hover { border-color: var(--primary-light); color: var(--primary); }
+        .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .filter-btn .count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-right: 6px;
+            padding: 0 5px;
+        }
+
+        .filter-btn.active .count { background: rgba(255,255,255,0.25); }
+        .filter-btn:not(.active) .count { background: var(--border-light); }
+
+        .tasks-list { display: flex; flex-direction: column; gap: 14px; }
+
+        .task-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1.5px solid var(--border-light);
+            overflow: hidden;
+            transition: all 0.2s;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .task-card:hover { box-shadow: var(--shadow-md); border-color: var(--border); }
+        .task-card.pending { border-right: 4px solid var(--accent); }
+        .task-card.completed { border-right: 4px solid var(--success); opacity: 0.75; }
+        .task-card.completed:hover { opacity: 1; }
+
+        .task-header {
+            padding: 18px 22px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .task-title { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.4; }
+        .task-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; margin-top: 2px; }
+
+        .task-status-badge {
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .badge-pending { background: var(--accent-light); color: #8B6914; }
+        .badge-completed { background: var(--success-light); color: #1E7A45; }
+        .task-body { padding: 0 22px 16px; }
+
+        .task-section-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            margin-top: 12px;
+        }
+
+        .files-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        .file-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            background: #FDF6E8;
+            border: 1px solid #F0DCA0;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            color: #7A5C0E;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .file-chip:hover { background: #F9EDD1; border-color: var(--accent); }
+        .file-chip .file-icon { font-size: 14px; }
+        .recipients-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        .recipient-chip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: #EEF2F0;
+            border-radius: 16px;
+            font-size: 12px;
+            color: var(--primary-light);
+            font-weight: 500;
+        }
+
+        .recipient-chip .r-icon { font-size: 12px; }
+
+        .task-footer {
+            padding: 12px 22px;
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #FAFAF8;
+        }
+
+        .task-from { font-size: 12px; color: var(--text-muted); }
+        .task-from strong { color: var(--text-secondary); }
+
+        .btn-sign {
+            padding: 8px 20px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: 'Heebo', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-mark-done { background: var(--primary); color: white; }
+        .btn-mark-done:hover { background: var(--primary-light); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(27,67,50,0.3); }
+        .btn-undo { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+        .btn-undo:hover { background: var(--surface); color: var(--danger); border-color: var(--danger); }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+
+        .fab {
+            position: fixed;
+            bottom: 28px;
+            left: 28px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .fab:hover { background: var(--primary-light); transform: scale(1.08); }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: var(--primary); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-family: 'Heebo', sans-serif;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            direction: rtl;
+        }
+
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
+        .form-group textarea { resize: vertical; min-height: 70px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-start; margin-top: 24px; }
+
+        .btn-primary {
+            padding: 10px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: 'Heebo', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover { background: var(--primary-light); }
+
+        .btn-cancel {
+            padding: 10px 24px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-family: 'Heebo', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel:hover { background: var(--surface-hover); }
+
+        .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .toast {
+            position: fixed;
+            bottom: 28px;
+            right: 50%;
+            transform: translateX(50%) translateY(100px);
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            transition: transform 0.3s ease;
+            z-index: 300;
+        }
+
+        .toast.show { transform: translateX(50%) translateY(0); }
+
+        @media (max-width: 640px) {
+            .header-inner { flex-direction: column; gap: 12px; text-align: center; }
+            .header-stats { justify-content: center; }
+            .task-header { flex-direction: column; }
+            .task-footer { flex-direction: column; gap: 10px; align-items: stretch; }
+            .btn-sign { justify-content: center; }
+            .modal { padding: 24px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen">
+    <div class="login-card">
+        <div class="icon-large">&#x270D;&#xFE0F;</div>
+        <h2>מעקב חתימות דיגיטליות</h2>
+        <p>עיריית רמת גן — אגף שפ"ע<br>מעקב אחר תוכניות הדורשות חתימה דיגיטלית</p>
+        <button class="btn-google" onclick="signIn()">
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.348 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+            כניסה עם Google
+        </button>
+    </div>
+</div>
+
+<div id="app" style="display:none;">
+    <header class="header">
+        <div class="header-inner">
+            <div class="header-right">
+                <div class="header-icon">&#x270D;&#xFE0F;</div>
+                <div>
+                    <h1>מעקב חתימות דיגיטליות</h1>
+                    <div class="header-sub">אגף שפ"ע — עיריית רמת גן</div>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-badge">
+                    <span class="dot dot-pending"></span>
+                    <span>ממתינים: <strong id="pendingCount">0</strong></span>
+                </div>
+                <div class="stat-badge">
+                    <span class="dot dot-done"></span>
+                    <span>הושלמו: <strong id="completedCount">0</strong></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="filters">
+            <button class="filter-btn active" data-filter="pending" onclick="setFilter('pending')">
+                ⏳ ממתין לחתימה <span class="count" id="filterPendingCount">0</span>
+            </button>
+            <button class="filter-btn" data-filter="completed" onclick="setFilter('completed')">
+                ✅ הושלמו <span class="count" id="filterCompletedCount">0</span>
+            </button>
+            <button class="filter-btn" data-filter="all" onclick="setFilter('all')">
+                📋 הכל <span class="count" id="filterAllCount">0</span>
+            </button>
+        </div>
+
+        <div id="tasksList" class="tasks-list">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>טוען משימות...</p>
+            </div>
+        </div>
+    </main>
+
+    <button class="fab" onclick="openAddModal()" title="הוסף משימה ידנית">+</button>
+</div>
+
+<div id="addModal" class="modal-overlay">
+    <div class="modal">
+        <h3>➕ הוסף משימת חתימה</h3>
+        <div class="form-group">
+            <label>נושא / כתובת</label>
+            <input type="text" id="manualSubject" placeholder="לדוגמה: ארנון 27 - חדר אשפה">
+        </div>
+        <div class="form-group">
+            <label>שולח/ת</label>
+            <input type="text" id="manualFrom" placeholder="שם השולח/ת" value="נורית שפרלינג">
+        </div>
+        <div class="form-group">
+            <label>נמענים (מופרד בפסיק)</label>
+            <textarea id="manualRecipients" placeholder="שם1 <email1>, שם2 <email2>"></textarea>
+        </div>
+        <div class="form-group">
+            <label>הערות</label>
+            <textarea id="manualNotes" placeholder="הערות נוספות..."></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-primary" onclick="addManualTask()">הוסף משימה</button>
+            <button class="btn-cancel" onclick="closeAddModal()">ביטול</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+// FIREBASE CONFIG - will be updated after project creation
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentFilter = 'pending';
+let allTasks = [];
+let unsubscribe = null;
+
+function signIn() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => {
+        console.error('Sign in error:', err);
+        showToast('שגיאה בכניסה: ' + err.message);
+    });
+}
+
+auth.onAuthStateChanged(user => {
+    if (user) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        listenToTasks();
+    } else {
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+        if (unsubscribe) unsubscribe();
+    }
+});
+
+function listenToTasks() {
+    unsubscribe = db.collection('signatures')
+        .orderBy('createdAt', 'desc')
+        .onSnapshot(snapshot => {
+            allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            updateCounts();
+            renderTasks();
+        }, err => {
+            console.error('Firestore error:', err);
+            document.getElementById('tasksList').innerHTML =
+                '<div class="empty-state"><div class="empty-icon">&#x26A0;&#xFE0F;</div><h3>שגיאה בטעינת נתונים</h3><p>' + err.message + '</p></div>';
+        });
+}
+
+function updateCounts() {
+    const pending = allTasks.filter(t => t.status === 'pending').length;
+    const completed = allTasks.filter(t => t.status === 'completed').length;
+    document.getElementById('pendingCount').textContent = pending;
+    document.getElementById('completedCount').textContent = completed;
+    document.getElementById('filterPendingCount').textContent = pending;
+    document.getElementById('filterCompletedCount').textContent = completed;
+    document.getElementById('filterAllCount').textContent = allTasks.length;
+}
+
+function renderTasks() {
+    const container = document.getElementById('tasksList');
+    let filtered = allTasks;
+    if (currentFilter === 'pending') filtered = allTasks.filter(t => t.status === 'pending');
+    else if (currentFilter === 'completed') filtered = allTasks.filter(t => t.status === 'completed');
+
+    if (filtered.length === 0) {
+        const msgs = {
+            pending: { icon: '🎉', title: 'אין חתימות ממתינות!', sub: 'כל הכבוד, הכל מטופל.' },
+            completed: { icon: '📭', title: 'אין חתימות שהושלמו עדיין', sub: '' },
+            all: { icon: '📋', title: 'אין משימות עדיין', sub: 'משימות יתווספו אוטומטית מהמייל.' }
+        };
+        const msg = msgs[currentFilter];
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">${msg.icon}</div><h3>${msg.title}</h3><p>${msg.sub}</p></div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(task => {
+        const isPending = task.status === 'pending';
+        const dateStr = task.createdAt ? formatDate(task.createdAt.toDate()) : '';
+
+        const filesHtml = (task.files && task.files.length > 0)
+            ? task.files.map(f => `<a class="file-chip" href="${f.url || '#'}" target="_blank" title="${f.name}"><span class="file-icon">📄</span>${truncate(f.name, 35)}</a>`).join('')
+            : '<span style="font-size:12px;color:var(--text-muted)">אין קבצים מצורפים</span>';
+
+        const recipientsHtml = (task.recipients && task.recipients.length > 0)
+            ? task.recipients.map(r => `<span class="recipient-chip"><span class="r-icon">👤</span>${r.name || r.email}</span>`).join('')
+            : '<span style="font-size:12px;color:var(--text-muted)">לא צוינו נמענים</span>';
+
+        return `
+            <div class="task-card ${isPending ? 'pending' : 'completed'}">
+                <div class="task-header">
+                    <div>
+                        <div class="task-title">${task.subject || 'ללא נושא'}</div>
+                        <div class="task-date">${dateStr}</div>
+                    </div>
+                    <span class="task-status-badge ${isPending ? 'badge-pending' : 'badge-completed'}">
+                        ${isPending ? '⏳ ממתין לחתימה' : '✅ נחתם ונשלח'}
+                    </span>
+                </div>
+                <div class="task-body">
+                    <div class="task-section-label">📎 קבצים לחתימה</div>
+                    <div class="files-list">${filesHtml}</div>
+                    <div class="task-section-label">👥 נמענים לשליחה</div>
+                    <div class="recipients-list">${recipientsHtml}</div>
+                    ${task.notes ? `<div class="task-section-label">📝 הערות</div><p style="font-size:13px;color:var(--text-secondary)">${task.notes}</p>` : ''}
+                </div>
+                <div class="task-footer">
+                    <span class="task-from">מ: <strong>${task.from || 'לא ידוע'}</strong></span>
+                    ${isPending
+                        ? `<button class="btn-sign btn-mark-done" onclick="markDone('${task.id}')">✅ נחתם ונשלח</button>`
+                        : `<button class="btn-sign btn-undo" onclick="markPending('${task.id}')">↩️ החזר לממתין</button>`
+                    }
+                </div>
+            </div>`;
+    }).join('');
+}
+
+async function markDone(id) {
+    await db.collection('signatures').doc(id).update({
+        status: 'completed',
+        completedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('✅ סומן כנחתם ונשלח');
+}
+
+async function markPending(id) {
+    await db.collection('signatures').doc(id).update({
+        status: 'pending',
+        completedAt: null
+    });
+    showToast('↩️ הוחזר לממתין');
+}
+
+function setFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    renderTasks();
+}
+
+function openAddModal() { document.getElementById('addModal').classList.add('active'); }
+function closeAddModal() { document.getElementById('addModal').classList.remove('active'); }
+
+async function addManualTask() {
+    const subject = document.getElementById('manualSubject').value.trim();
+    const from = document.getElementById('manualFrom').value.trim();
+    const recipientsRaw = document.getElementById('manualRecipients').value.trim();
+    const notes = document.getElementById('manualNotes').value.trim();
+
+    if (!subject) { showToast('⚠️ יש להזין נושא'); return; }
+
+    const recipients = recipientsRaw ? recipientsRaw.split(',').map(r => {
+        r = r.trim();
+        const match = r.match(/^(.+?)\s*<(.+?)>$/);
+        return match ? { name: match[1].trim(), email: match[2].trim() } : { name: r, email: r };
+    }) : [];
+
+    await db.collection('signatures').add({
+        subject, from: from || 'נורית שפרלינג', recipients, files: [], notes: notes || '',
+        status: 'pending', source: 'manual', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    document.getElementById('manualSubject').value = '';
+    document.getElementById('manualRecipients').value = '';
+    document.getElementById('manualNotes').value = '';
+    closeAddModal();
+    showToast('✅ משימה נוספה');
+}
+
+function formatDate(date) {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+function truncate(str, len) { return str && str.length > len ? str.substring(0, len) + '...' : str; }
+
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+document.getElementById('addModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('addModal')) closeAddModal();
+});
+</script>
+</body>
+</html>
