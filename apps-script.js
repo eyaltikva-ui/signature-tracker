@@ -350,8 +350,8 @@ async function signPdfBlob(pdfBlob) {
   if (stampImgData) {
     sopt.drawinf = {
       area: {
-        x: 30,
-        y: 30,
+        x: 5,
+        y: 5,
         w: 70,
         h: 85
       },
