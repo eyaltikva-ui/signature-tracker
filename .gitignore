@@ -1,0 +1,6 @@
+# Certificate files - DO NOT commit to git
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt

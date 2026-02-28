@@ -293,11 +293,229 @@ function sendNewTaskNotification(count) {
   );
 }
 
+// ==========================================
+// חתימה דיגיטלית אוטומטית — ZgaPdfSigner
+// ==========================================
+
+function firestoreUpdate(docPath, data) {
+  const firestoreData = { fields: objectToFirestore(data) };
+  const updateMask = Object.keys(data).map(k => `updateMask.fieldPaths=${k}`).join('&');
+  const url = `${getFirestoreUrl(docPath)}?${updateMask}`;
+  const response = UrlFetchApp.fetch(url, {
+    method: 'PATCH',
+    headers: { 'Authorization': 'Bearer ' + getAuthToken(), 'Content-Type': 'application/json' },
+    payload: JSON.stringify(firestoreData),
+    muteHttpExceptions: true
+  });
+  return JSON.parse(response.getContentText());
+}
+
+async function signPdfBlob(pdfBlob) {
+  // טעינת ספריית ZgaPdfSigner
+  pdfkit.loadZga(globalThis);
+
+  // קריאת התעודה הדיגיטלית מ-Script Properties
+  const props = PropertiesService.getScriptProperties();
+  const p12Base64 = props.getProperty('P12_CERT');
+  const p12Password = props.getProperty('P12_PASSWORD');
+
+  if (!p12Base64 || !p12Password) {
+    throw new Error('חסרים P12_CERT או P12_PASSWORD ב-Script Properties');
+  }
+
+  const certBytes = Utilities.base64Decode(p12Base64);
+
+  const sopt = {
+    p12cert: certBytes,
+    pwd: p12Password,
+    signdate: '1',
+    reason: 'אושר — אגף שפע, עיריית רמת גן',
+    location: 'רמת גן',
+    contact: 'eyal-t@ramat-gan.muni.il',
+    ltv: 0
+  };
+
+  const signer = new Zga.PdfSigner(sopt);
+  const signedBytes = await signer.sign(pdfBlob.getBytes());
+  return Utilities.newBlob([...signedBytes], 'application/pdf');
+}
+
+async function autoSignPendingTasks() {
+  Logger.log('🖊️ מתחיל חתימה אוטומטית...');
+
+  // שליפת משימות ממתינות מ-Firestore
+  const url = `https://firestore.googleapis.com/v1/projects/${CONFIG.FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery`;
+  const query = {
+    structuredQuery: {
+      from: [{ collectionId: 'signatures' }],
+      where: { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'pending' } } }
+    }
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: { 'Authorization': 'Bearer ' + getAuthToken(), 'Content-Type': 'application/json' },
+    payload: JSON.stringify(query), muteHttpExceptions: true
+  });
+
+  const results = JSON.parse(response.getContentText());
+  const pendingTasks = results.filter(r => r.document);
+
+  if (pendingTasks.length === 0) {
+    Logger.log('✅ אין משימות ממתינות.');
+    return;
+  }
+
+  Logger.log(`📋 נמצאו ${pendingTasks.length} משימות ממתינות`);
+  const driveFolder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+  let signedCount = 0;
+
+  for (const item of pendingTasks) {
+    const fields = item.document.fields;
+    const docId = item.document.name.split('/').pop();
+    const subject = fields.subject?.stringValue || 'ללא נושא';
+    const fromEmail = fields.fromEmail?.stringValue || CONFIG.SENDER_FILTER;
+    const fromName = fields.from?.stringValue || '';
+
+    Logger.log(`🔄 מעבד: ${subject}`);
+
+    // בדיקה שיש קבצים
+    const filesArray = fields.files?.arrayValue?.values || [];
+    if (filesArray.length === 0) {
+      Logger.log('  ⚠️ אין קבצים — מדלג');
+      continue;
+    }
+
+    const signedFiles = [];
+    let allSigned = true;
+
+    for (const fileVal of filesArray) {
+      const fileFields = fileVal.mapValue?.fields;
+      if (!fileFields) continue;
+
+      const fileName = fileFields.name?.stringValue || 'document.pdf';
+      const driveId = fileFields.driveId?.stringValue;
+
+      // רק PDFs ניתנים לחתימה דיגיטלית
+      if (!fileName.toLowerCase().endsWith('.pdf') || !driveId) {
+        Logger.log(`  ⏭️ דילוג על ${fileName} (לא PDF או חסר driveId)`);
+        signedFiles.push({ name: fileName, driveId: driveId || '', url: fileFields.url?.stringValue || '' });
+        continue;
+      }
+
+      try {
+        const pdfFile = DriveApp.getFileById(driveId);
+        const pdfBlob = pdfFile.getBlob();
+
+        Logger.log(`  ✍️ חותם: ${fileName}`);
+        const signedBlob = await signPdfBlob(pdfBlob);
+        signedBlob.setName(`חתום_${fileName}`);
+
+        // שמירת הקובץ החתום ב-Drive
+        const signedDriveFile = driveFolder.createFile(signedBlob);
+        signedDriveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        signedFiles.push({
+          name: `חתום_${fileName}`,
+          driveId: signedDriveFile.getId(),
+          url: signedDriveFile.getUrl()
+        });
+
+        Logger.log(`  ✅ נחתם ונשמר: חתום_${fileName}`);
+      } catch (e) {
+        Logger.log(`  ❌ שגיאה בחתימת ${fileName}: ${e.message}`);
+        allSigned = false;
+        signedFiles.push({ name: fileName, driveId: driveId, url: fileFields.url?.stringValue || '' });
+      }
+    }
+
+    if (!allSigned) {
+      Logger.log(`  ⚠️ לא כל הקבצים נחתמו — ממשיך לבא`);
+      continue;
+    }
+
+    // שליחת הקבצים החתומים בחזרה
+    try {
+      sendSignedFiles(subject, fromEmail, fromName, signedFiles, fields.recipients);
+      Logger.log(`  📧 נשלח בחזרה ל-${fromEmail}`);
+    } catch (e) {
+      Logger.log(`  ❌ שגיאה בשליחה: ${e.message}`);
+      continue;
+    }
+
+    // עדכון סטטוס ל-completed
+    firestoreUpdate(`signatures/${docId}`, {
+      status: 'completed',
+      signedAt: new Date(),
+      signedFiles: signedFiles
+    });
+
+    signedCount++;
+    Logger.log(`  ✅ הושלם: ${subject}`);
+  }
+
+  Logger.log(`🏁 חתימה אוטומטית הסתיימה. ${signedCount} משימות נחתמו.`);
+}
+
+function sendSignedFiles(subject, toEmail, fromName, signedFiles, recipientsField) {
+  // איסוף כל הנמענים (שולח מקורי + נמענים נוספים)
+  const allRecipients = new Set();
+  allRecipients.add(toEmail);
+
+  if (recipientsField?.arrayValue?.values) {
+    for (const r of recipientsField.arrayValue.values) {
+      const email = r.mapValue?.fields?.email?.stringValue;
+      if (email) allRecipients.add(email);
+    }
+  }
+
+  // הכנת קבצים מצורפים
+  const attachments = [];
+  for (const f of signedFiles) {
+    if (f.driveId && f.name.startsWith('חתום_')) {
+      try {
+        attachments.push(DriveApp.getFileById(f.driveId).getBlob());
+      } catch (e) { Logger.log(`  ⚠️ לא ניתן לצרף ${f.name}`); }
+    }
+  }
+
+  const linksHtml = signedFiles
+    .filter(f => f.url && f.name.startsWith('חתום_'))
+    .map(f => `<a href="${f.url}">${f.name}</a>`)
+    .join('<br>');
+
+  const htmlBody = `<div dir="rtl" style="font-family: Arial, sans-serif;">
+    <div style="background: #1B4332; color: white; padding: 15px 20px; border-radius: 10px 10px 0 0;">
+      <h3 style="margin: 0;">✅ מסמך נחתם דיגיטלית</h3>
+    </div>
+    <div style="background: white; padding: 20px; border: 1px solid #E0DCD5; border-radius: 0 0 10px 10px;">
+      <p><strong>נושא:</strong> ${subject}</p>
+      <p>המסמכים הבאים נחתמו בחתימה דיגיטלית:</p>
+      <div style="background: #F0FFF4; padding: 12px; border-radius: 8px; margin: 10px 0;">
+        ${linksHtml}
+      </div>
+      <p style="color: #666; font-size: 12px;">נחתם אוטומטית — אגף שפ"ע, עיריית רמת גן</p>
+    </div>
+  </div>`;
+
+  const recipientList = [...allRecipients].join(',');
+
+  GmailApp.sendEmail(recipientList, `✅ נחתם: ${subject}`,
+    `המסמכים נחתמו דיגיטלית. ${signedFiles.filter(f => f.url).map(f => f.url).join('\n')}`,
+    {
+      htmlBody: htmlBody,
+      attachments: attachments,
+      name: 'חתימות דיגיטליות — עיריית רמת גן'
+    }
+  );
+}
+
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('scanGmailForSignatures').timeBased().everyMinutes(10).create();
   ScriptApp.newTrigger('sendDailyReminder').timeBased().atHour(8).everyDays(1).inTimezone('Asia/Jerusalem').create();
-  Logger.log('✅ Triggers הוגדרו!');
+  ScriptApp.newTrigger('autoSignPendingTasks').timeBased().everyMinutes(15).create();
+  Logger.log('✅ Triggers הוגדרו (כולל חתימה אוטומטית כל 15 דקות)!');
 }
 
 function testAddSampleTask() {
