@@ -3,6 +3,8 @@ const CONFIG = {
   DRIVE_FOLDER_ID: '155VRDwcInG32Tl-0tTfm_rMmGgfAOhRL',
   REMINDER_EMAIL: 'eyal-t@ramat-gan.muni.il',
   SENDER_FILTER: 'nurit-sp@ramat-gan.muni.il',
+  FORWARDER_EMAIL: 'eyal-t@ramat-gan.muni.il',
+  MY_EMAIL: 'eyaltikva@gmail.com',
   GMAIL_LABEL: 'חתימה-דיגיטלית',
   KEYWORDS: ['חתימה דיגיטלית', 'חתימה', 'אנא חתימה', 'נא לחתום'],
   MAX_THREADS: 20
@@ -74,19 +76,38 @@ function objectToFirestore(obj) {
 
 function scanGmailForSignatures() {
   Logger.log('🔍 מתחיל סריקת Gmail...');
-  const searchQuery = `from:${CONFIG.SENDER_FILTER} OR (subject:(חתימה דיגיטלית) from:${CONFIG.SENDER_FILTER})`;
-  let threads;
-  try {
-    threads = GmailApp.search(searchQuery, 0, CONFIG.MAX_THREADS);
-  } catch (e) {
-    threads = GmailApp.search(`"nurit-sp@ramat-gan.muni.il" "חתימה"`, 0, CONFIG.MAX_THREADS);
+
+  // חיפוש 1: מיילים ישירים מנורית (אם יש)
+  // חיפוש 2: מיילים מועברים מהחשבון העירוני עם מילות מפתח
+  // חיפוש 3: מיילים שמכילים את השם/מייל של נורית (העברה ידנית)
+  const queries = [
+    `from:${CONFIG.SENDER_FILTER}`,
+    `from:${CONFIG.FORWARDER_EMAIL} (subject:(חתימה) OR subject:(Fwd) OR subject:(FW))`,
+    `"${CONFIG.SENDER_FILTER}" (subject:(חתימה) OR subject:(היתר) OR subject:(אנא חתימה))`
+  ];
+
+  const allThreadIds = new Set();
+  let allThreads = [];
+
+  for (const q of queries) {
+    try {
+      const threads = GmailApp.search(q, 0, CONFIG.MAX_THREADS);
+      for (const thread of threads) {
+        if (!allThreadIds.has(thread.getId())) {
+          allThreadIds.add(thread.getId());
+          allThreads.push(thread);
+        }
+      }
+    } catch (e) {
+      Logger.log(`⚠️ שגיאה בחיפוש: ${e.message}`);
+    }
   }
 
-  Logger.log(`נמצאו ${threads.length} שרשורים`);
+  Logger.log(`נמצאו ${allThreads.length} שרשורים`);
   let newCount = 0;
   const driveFolder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
 
-  for (const thread of threads) {
+  for (const thread of allThreads) {
     const messages = thread.getMessages();
     for (const message of messages) {
       const messageId = message.getId();
@@ -95,10 +116,20 @@ function scanGmailForSignatures() {
 
       const body = message.getPlainBody() || '';
       const subject = message.getSubject() || '';
+      const senderEmail = message.getFrom().match(/<(.+?)>/) ? message.getFrom().match(/<(.+?)>/)[1].toLowerCase() : message.getFrom().toLowerCase();
+
+      // בדיקה: האם מייל מנורית (ישיר), או מועבר מהחשבון העירוני, או מכיל את נורית בגוף
+      const isFromNurit = senderEmail.includes(CONFIG.SENDER_FILTER);
+      const isForwarded = senderEmail.includes(CONFIG.FORWARDER_EMAIL) || senderEmail.includes(CONFIG.MY_EMAIL);
+      const bodyMentionsNurit = body.includes(CONFIG.SENDER_FILTER) || body.includes('נורית שפרלינג') || body.includes('נורית');
+
+      if (!isFromNurit && !isForwarded && !bodyMentionsNurit) continue;
+
+      // סינון מחמיר: חייב להכיל מילת מפתח של חתימה דיגיטלית
       const hasKeyword = CONFIG.KEYWORDS.some(kw => body.includes(kw) || subject.includes(kw));
       if (!hasKeyword) continue;
 
-      Logger.log(`📩 עיבוד: ${subject}`);
+      Logger.log(`📩 עיבוד: ${subject} (${isFromNurit ? 'ישיר' : 'מועבר'})`);
 
       const files = [];
       const attachments = message.getAttachments();
@@ -116,11 +147,21 @@ function scanGmailForSignatures() {
       }
 
       const recipients = extractRecipients(message);
-      const fromName = extractSenderName(message);
+
+      // חילוץ שם השולח: מנורית ישירות, או מגוף ההעברה
+      let fromName, fromEmail;
+      if (isFromNurit) {
+        fromName = extractSenderName(message);
+        fromEmail = CONFIG.SENDER_FILTER;
+      } else {
+        // מייל מועבר — מנסים לחלץ את השולח המקורי מגוף ההודעה
+        fromName = extractOriginalSender(body) || 'נורית שפרלינג';
+        fromEmail = extractOriginalEmail(body) || CONFIG.SENDER_FILTER;
+      }
 
       const result = firestoreAdd('signatures', {
-        subject: cleanSubject(subject), from: fromName, fromEmail: CONFIG.SENDER_FILTER,
-        recipients, files, notes: '', status: 'pending', source: 'gmail',
+        subject: cleanSubject(subject), from: fromName, fromEmail: fromEmail,
+        recipients, files, notes: '', status: 'pending', source: isFromNurit ? 'gmail' : 'forwarded',
         messageId, threadId: thread.getId(), createdAt: new Date(), emailDate: message.getDate()
       });
 
@@ -144,12 +185,45 @@ function extractRecipients(message) {
     const name = match[1] ? match[1].trim().replace(/^["']|["']$/g, '') : '';
     if (email === CONFIG.REMINDER_EMAIL.toLowerCase()) continue;
     if (email === CONFIG.SENDER_FILTER.toLowerCase()) continue;
+    if (email === CONFIG.MY_EMAIL.toLowerCase()) continue;
+    if (email === CONFIG.FORWARDER_EMAIL.toLowerCase()) continue;
     if (email.includes('mazcirut@')) continue;
     if (seen.has(email)) continue;
     seen.add(email);
     recipients.push({ name: name || email.split('@')[0], email });
   }
   return recipients;
+}
+
+function extractOriginalSender(body) {
+  // ניסיון לחלץ שם שולח מקורי מגוף מייל מועבר
+  // תבניות נפוצות: "מאת: נורית שפרלינג", "From: Nurit", "---------- Forwarded message ----------"
+  const patterns = [
+    /מאת:\s*([^\n<]+?)[\s]*[<\n]/,
+    /From:\s*([^\n<]+?)[\s]*[<\n]/,
+    /מ:\s*([^\n<]+?)[\s]*[<\n]/
+  ];
+  for (const p of patterns) {
+    const m = body.match(p);
+    if (m) return m[1].trim().replace(/^["']|["']$/g, '');
+  }
+  return null;
+}
+
+function extractOriginalEmail(body) {
+  // ניסיון לחלץ מייל שולח מקורי מגוף מייל מועבר
+  const patterns = [
+    /מאת:.*?<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/,
+    /From:.*?<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/,
+    /מ:.*?<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/
+  ];
+  for (const p of patterns) {
+    const m = body.match(p);
+    if (m) return m[1].toLowerCase();
+  }
+  // אם לא מצאנו בתבנית, מחפשים את המייל של נורית בגוף
+  if (body.includes(CONFIG.SENDER_FILTER)) return CONFIG.SENDER_FILTER;
+  return null;
 }
 
 function cleanSubject(subject) {
