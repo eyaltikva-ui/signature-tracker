@@ -352,8 +352,8 @@ async function signPdfBlob(pdfBlob) {
       area: {
         x: 30,
         y: 30,
-        w: 150,
-        h: 180
+        w: 70,
+        h: 85
       },
       imgInfo: {
         imgData: stampImgData,
