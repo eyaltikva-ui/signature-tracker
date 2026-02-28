@@ -5,6 +5,7 @@ const CONFIG = {
   SENDER_FILTER: 'nurit-sp@ramat-gan.muni.il',
   FORWARDER_EMAIL: 'eyal-t@ramat-gan.muni.il',
   MY_EMAIL: 'eyaltikva@gmail.com',
+  STAMP_IMAGE_ID: '1iU8-8u0U-3mtDV3MTOQJ-fa_GpxK81al',
   GMAIL_LABEL: 'חתימה-דיגיטלית',
   KEYWORDS: ['חתימה דיגיטלית', 'חתימה', 'אנא חתימה', 'נא לחתום'],
   MAX_THREADS: 20
@@ -325,6 +326,16 @@ async function signPdfBlob(pdfBlob) {
 
   const certBytes = Utilities.base64Decode(p12Base64);
 
+  // טעינת תמונת החותמת מ-Drive
+  let stampImgData = null;
+  try {
+    const stampFile = DriveApp.getFileById(CONFIG.STAMP_IMAGE_ID);
+    stampImgData = stampFile.getBlob().getBytes();
+    Logger.log('🖼️ תמונת חותמת נטענה בהצלחה');
+  } catch (e) {
+    Logger.log('⚠️ לא ניתן לטעון תמונת חותמת: ' + e.message);
+  }
+
   const sopt = {
     p12cert: certBytes,
     pwd: p12Password,
@@ -334,6 +345,22 @@ async function signPdfBlob(pdfBlob) {
     contact: 'eyal-t@ramat-gan.muni.il',
     ltv: 0
   };
+
+  // הוספת חותמת ויזואלית אם התמונה נטענה
+  if (stampImgData) {
+    sopt.drawinf = {
+      area: {
+        x: 30,
+        y: 30,
+        w: 150,
+        h: 180
+      },
+      imgInfo: {
+        imgData: stampImgData,
+        imgType: 'png'
+      }
+    };
+  }
 
   const signer = new Zga.PdfSigner(sopt);
   const signedBytes = await signer.sign(pdfBlob.getBytes());
@@ -536,4 +563,23 @@ function testAddSampleTask() {
     status: 'pending', source: 'test', messageId: 'test-' + Date.now(), createdAt: new Date()
   });
   Logger.log('Result: ' + JSON.stringify(result));
+}
+
+async function testSignPdf() {
+  // חיפוש קובץ PDF בתיקייה
+  const folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+  const files = folder.getFilesByType('application/pdf');
+  if (!files.hasNext()) {
+    Logger.log('❌ לא נמצאו קבצי PDF בתיקייה');
+    return;
+  }
+  const pdfFile = files.next();
+  Logger.log('📄 חותם את: ' + pdfFile.getName());
+
+  const signedBlob = await signPdfBlob(pdfFile.getBlob());
+  signedBlob.setName('TEST_SIGNED_' + pdfFile.getName());
+
+  const savedFile = folder.createFile(signedBlob);
+  Logger.log('✅ קובץ חתום נשמר: ' + savedFile.getName());
+  Logger.log('🔗 ' + savedFile.getUrl());
 }
