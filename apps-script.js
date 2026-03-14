@@ -4,7 +4,7 @@ const CONFIG = {
   REMINDER_EMAIL: 'eyal-t@ramat-gan.muni.il',
   SENDER_FILTER: 'nurit-sp@ramat-gan.muni.il',
   FORWARDER_EMAIL: 'eyal-t@ramat-gan.muni.il',
-  MY_EMAIL: 'eyaltikva@gmail.com',
+  MY_EMAIL: 'eyaltikvargproject@gmail.com',
   STAMP_IMAGE_ID: '1iU8-8u0U-3mtDV3MTOQJ-fa_GpxK81al',
   GMAIL_LABEL: 'חתימה-דיגיטלית',
   KEYWORDS: ['חתימה דיגיטלית', 'חתימה', 'אנא חתימה', 'נא לחתום'],
